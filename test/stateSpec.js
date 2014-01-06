@@ -93,7 +93,13 @@ describe('state', function () {
       })
 
       .state('first', { url: '^/first/subpath' })
-      .state('second', { url: '^/second' });
+      .state('second', { url: '^/second' })
+
+      // State param inheritance tests. param1 is inherited by sub1 & sub2;
+      // param2 should not be transferred (unless explicitly set).
+      .state('root', { url: '^/root?param1' })
+      .state('root.sub1', {url: '/1?param2' })
+      .state('root.sub2', {url: '/2?param2' });
 
     $provide.value('AppInjectable', AppInjectable);
   }));
@@ -497,6 +503,7 @@ describe('state', function () {
     it('should return true when the current state is passed', inject(function ($state, $q) {
       $state.transitionTo(A); $q.flush();
       expect($state.is(A)).toBe(true);
+      expect($state.is(A, null)).toBe(true);
       expect($state.is('A')).toBe(true);
       expect($state.is(B)).toBe(false);
     }));
@@ -668,6 +675,9 @@ describe('state', function () {
         'home.redirect',
         'resolveFail',
         'resolveTimeout',
+        'root',
+        'root.sub1',
+        'root.sub2',
         'second'
       ];
       expect(list.map(function(state) { return state.name; })).toEqual(names);
@@ -687,6 +697,17 @@ describe('state', function () {
       $rootScope.$apply();
       expect($state.params).toEqual({ person: "larry" });
       expect($state.current.name).toBe('about.person');
+    }));
+
+    it('preserve hash', inject(function($state, $rootScope, $location) {
+      $location.path("/about/bob");
+      $location.hash("frag");
+      $rootScope.$broadcast("$locationChangeSuccess");
+      $rootScope.$apply();
+      expect($state.params).toEqual({ person: "bob" });
+      expect($state.current.name).toBe('about.person');
+      expect($location.path()).toBe('/about/bob');
+      expect($location.hash()).toBe('frag');
     }));
 
     it('should correctly handle absolute urls', inject(function ($state, $rootScope, $location) {
@@ -787,6 +808,29 @@ describe('state', function () {
       expect($state.current.data.propB).toEqual(H.data.propB);
       expect($state.current.data.propB).toEqual(HH.data.propB);
       expect($state.current.data.propC).toEqual(HHH.data.propC);
+    }));
+  });
+
+  describe('substate and stateParams inheritance', function() {
+    it('should inherit the parent param', inject(function ($state, $stateParams, $q) {
+      initStateTo($state.get('root'), {param1: 1});
+      $state.go('root.sub1', {param2: 2});
+      $q.flush();
+      expect($state.current.name).toEqual('root.sub1');
+      expect($stateParams).toEqual({param1: '1', param2: '2'});
+    }));
+
+    it('should not inherit siblings\' states', inject(function ($state, $stateParams, $q) {
+      initStateTo($state.get('root'), {param1: 1});
+      $state.go('root.sub1', {param2: 2});
+      $q.flush();
+      expect($state.current.name).toEqual('root.sub1');
+
+      $state.go('root.sub2');
+      $q.flush();
+      expect($state.current.name).toEqual('root.sub2');
+
+      expect($stateParams).toEqual({param1: '1', param2: null});
     }));
   });
 
